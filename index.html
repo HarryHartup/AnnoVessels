@@ -131,7 +131,7 @@
             font-family: 'Cinzel', serif;
         }
 
-        select, input[type="text"] {
+        select, input[type="text"], textarea {
             padding: 12px;
             border: 2px solid var(--brass-dark);
             border-radius: 4px;
@@ -144,7 +144,12 @@
             width: 100%;
         }
 
-        select:focus, input[type="text"]:focus {
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        select:focus, input[type="text"]:focus, textarea:focus {
             outline: none;
             border-color: var(--brass);
             box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2), inset 0 2px 4px rgba(0,0,0,0.1);
@@ -311,6 +316,13 @@
             margin: 0;
         }
 
+        .vessel-version {
+            font-size: 0.9rem;
+            color: var(--brass-dark);
+            margin-left: 5px;
+            font-weight: 600;
+        }
+
         .vessel-type-badge {
             display: inline-flex;
             align-items: center;
@@ -369,6 +381,23 @@
         .propulsion-other {
             background: #95a5a6;
             color: white;
+        }
+
+        .vessel-notes {
+            background: rgba(93, 64, 46, 0.05);
+            border-left: 3px solid var(--brass);
+            padding: 8px 12px;
+            margin-top: 10px;
+            font-size: 0.85rem;
+            font-style: italic;
+            color: var(--wood-mid);
+            border-radius: 0 4px 4px 0;
+            max-height: 60px;
+            overflow-y: auto;
+        }
+
+        .vessel-notes:empty {
+            display: none;
         }
 
         .vessel-actions {
@@ -575,6 +604,53 @@
         .hidden {
             display: none !important;
         }
+
+        .version-info {
+            background: rgba(212, 175, 55, 0.1);
+            border: 1px solid var(--brass);
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-family: 'Cinzel', serif;
+        }
+
+        .version-number {
+            font-size: 1.2rem;
+            color: var(--brass-dark);
+            font-weight: 700;
+        }
+
+        .version-btn {
+            background: linear-gradient(180deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-top: 8px;
+            transition: all 0.3s;
+        }
+
+        .version-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .rebuild-section {
+            border: 2px dashed var(--danger);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            background: rgba(192, 57, 43, 0.05);
+        }
+
+        .rebuild-section label {
+            color: var(--danger);
+            font-size: 0.8rem;
+        }
     </style>
 <base target="_blank">
 </head>
@@ -670,6 +746,12 @@
         <div class="modal-content">
             <button class="close-modal" onclick="closeModal()">×</button>
             <h2 class="modal-header">Edit Vessel</h2>
+            
+            <!-- Version Display -->
+            <div class="version-info">
+                <div>Current Version: <span class="version-number" id="currentVersion">I</span></div>
+            </div>
+            
             <div class="form-row">
                 <label>Propulsion</label>
                 <div id="editPropulsionDisplay" style="padding: 10px; background: rgba(0,0,0,0.1); border-radius: 4px; margin-top: 5px; font-weight: bold;"></div>
@@ -681,6 +763,12 @@
                 </select>
                 <input type="text" id="editNameCustom" style="width: 100%; margin-top: 5px; padding: 10px; display: none;">
             </div>
+            
+            <div class="form-row">
+                <label>Vessel Class</label>
+                <div id="editClassDisplay" style="padding: 10px; background: rgba(0,0,0,0.1); border-radius: 4px; margin-top: 5px; font-weight: bold;"></div>
+            </div>
+            
             <div class="form-row">
                 <label>Role</label>
                 <select id="editRole" style="width: 100%; margin-top: 5px; padding: 10px;">
@@ -689,6 +777,12 @@
                     <option value="other">🌊 Other</option>
                 </select>
             </div>
+            
+            <div class="form-row">
+                <label>Current Assignment / Route / Notes</label>
+                <textarea id="editNotes" placeholder="Enter current job, trade route, or notes..."></textarea>
+            </div>
+            
             <div class="form-row">
                 <label>Status</label>
                 <div class="checkbox-group">
@@ -700,6 +794,18 @@
                     </label>
                 </div>
             </div>
+            
+            <!-- Rebuild Section -->
+            <div class="rebuild-section">
+                <label style="color: var(--danger);">⚠️ Rebuild Vessel (Increment Version)</label>
+                <p style="font-size: 0.85rem; margin: 8px 0; color: var(--wood-mid);">
+                    Check this if the vessel was destroyed and rebuilt. This will increment the Roman numeral version.
+                </p>
+                <label class="checkbox-label" style="font-weight: bold; color: var(--danger);">
+                    <input type="checkbox" id="rebuildVessel"> Vessel was destroyed and rebuilt
+                </label>
+            </div>
+            
             <button class="btn btn-primary" onclick="saveEdit()" style="width: 100%; margin-top: 20px;">
                 Save Changes
             </button>
@@ -738,21 +844,49 @@
             "Hakon", "Olaf", "Erik", "Bjorn", "Ragnar", "Ivar", "Sigurd", "Ubba", "Guthrum", "Alfred"
         ];
 
+        // Convert number to Roman numeral
+        function toRoman(num) {
+            const romanNumerals = [
+                { value: 1000, numeral: 'M' },
+                { value: 900, numeral: 'CM' },
+                { value: 500, numeral: 'D' },
+                { value: 400, numeral: 'CD' },
+                { value: 100, numeral: 'C' },
+                { value: 90, numeral: 'XC' },
+                { value: 50, numeral: 'L' },
+                { value: 40, numeral: 'XL' },
+                { value: 10, numeral: 'X' },
+                { value: 9, numeral: 'IX' },
+                { value: 5, numeral: 'V' },
+                { value: 4, numeral: 'IV' },
+                { value: 1, numeral: 'I' }
+            ];
+            
+            let result = '';
+            for (const { value, numeral } of romanNumerals) {
+                while (num >= value) {
+                    result += numeral;
+                    num -= value;
+                }
+            }
+            return result;
+        }
+
         // Initialize data from localStorage or use defaults
         let vessels = JSON.parse(localStorage.getItem('annoVessels')) || [
-            { id: 1, name: 'Hercules II', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false },
-            { id: 2, name: 'Posiden', type: 'Ship-of-the-line', role: 'fighting', propulsion: 'sail', active: true, damaged: false },
-            { id: 3, name: 'Olympia', type: 'Flagship', role: 'other', propulsion: 'sail', active: true, damaged: false },
-            { id: 4, name: 'Zeus', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false },
-            { id: 5, name: 'Apollo', type: 'Clipper', role: 'trade', propulsion: 'sail', active: true, damaged: false },
-            { id: 6, name: 'Aphrodite', type: 'Clipper', role: 'trade', propulsion: 'sail', active: true, damaged: false },
-            { id: 7, name: 'Hermes', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false },
-            { id: 8, name: 'Hera II', type: 'Clipper', role: 'trade', propulsion: 'sail', active: true, damaged: false },
-            { id: 9, name: 'Athena II', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false },
-            { id: 10, name: 'Ares II', type: 'Ship-of-the-line', role: 'fighting', propulsion: 'sail', active: true, damaged: false },
-            { id: 11, name: 'Atlas IV', type: 'Gunboat', role: 'trade', propulsion: 'sail', active: true, damaged: false },
-            { id: 12, name: 'Vali', type: 'Oil Tanker', role: 'other', propulsion: 'steam', active: true, damaged: false },
-            { id: 13, name: 'Ploutos II', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false }
+            { id: 1, name: 'Hercules', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 2, notes: 'Trading spices to Old World' },
+            { id: 2, name: 'Poseidon', type: 'Ship-of-the-line', role: 'fighting', propulsion: 'sail', active: true, damaged: false, version: 1, notes: 'Patrolling northern waters' },
+            { id: 3, name: 'Olympia', type: 'Flagship', role: 'other', propulsion: 'sail', active: true, damaged: false, version: 1, notes: '' },
+            { id: 4, name: 'Zeus', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 1, notes: '' },
+            { id: 5, name: 'Apollo', type: 'Clipper', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 1, notes: 'Cotton route' },
+            { id: 6, name: 'Aphrodite', type: 'Clipper', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 1, notes: '' },
+            { id: 7, name: 'Hermes', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 1, notes: 'Fast mail delivery' },
+            { id: 8, name: 'Hera', type: 'Clipper', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 2, notes: '' },
+            { id: 9, name: 'Athena', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 2, notes: 'Armed merchant vessel' },
+            { id: 10, name: 'Ares', type: 'Ship-of-the-line', role: 'fighting', propulsion: 'sail', active: true, damaged: false, version: 2, notes: 'Fleet flagship' },
+            { id: 11, name: 'Atlas', type: 'Gunboat', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 4, notes: 'Coastal protection' },
+            { id: 12, name: 'Vali', type: 'Oil Tanker', role: 'other', propulsion: 'steam', active: true, damaged: false, version: 1, notes: 'Oil transport from New World' },
+            { id: 13, name: 'Ploutos', type: 'Frigate', role: 'trade', propulsion: 'sail', active: true, damaged: false, version: 2, notes: 'Gold transport' }
         ];
 
         let currentFilter = 'all';
@@ -881,12 +1015,15 @@
 
             emptyState.classList.add('hidden');
             
-            container.innerHTML = filtered.map(vessel => `
+            container.innerHTML = filtered.map(vessel => {
+                const versionRoman = toRoman(vessel.version || 1);
+                return `
                 <div class="vessel-card" data-id="${vessel.id}">
                     <div class="vessel-header">
                         <div>
                             <h3 class="vessel-name">
                                 ${vessel.name}
+                                ${vessel.version > 1 ? `<span class="vessel-version">${versionRoman}</span>` : ''}
                                 <span class="propulsion-badge propulsion-${vessel.propulsion}">
                                     ${getPropulsionIcon(vessel.propulsion)} ${vessel.propulsion}
                                 </span>
@@ -908,6 +1045,8 @@
                             <span>${vessel.damaged ? 'Damaged' : 'Intact'}</span>
                         </div>
                     </div>
+                    
+                    ${vessel.notes ? `<div class="vessel-notes">📋 ${vessel.notes}</div>` : ''}
 
                     <div class="vessel-actions">
                         <button class="btn-action" onclick="toggleActive(${vessel.id})">
@@ -924,7 +1063,7 @@
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // Add new vessel
@@ -958,7 +1097,7 @@
                 return;
             }
 
-            // Check for duplicate names
+            // Check for duplicate names (excluding versioned vessels)
             if (vessels.some(v => v.name === name)) {
                 showToast('A vessel with this name already exists!', 'error');
                 return;
@@ -971,7 +1110,9 @@
                 role: role,
                 propulsion: propulsion,
                 active: true,
-                damaged: false
+                damaged: false,
+                version: 1,
+                notes: ''
             };
 
             vessels.push(newVessel);
@@ -1038,10 +1179,17 @@
 
             editingId = id;
             
+            // Show version
+            const version = vessel.version || 1;
+            document.getElementById('currentVersion').textContent = toRoman(version);
+            
             // Show propulsion type (read-only)
             document.getElementById('editPropulsionDisplay').innerHTML = 
                 `${getPropulsionIcon(vessel.propulsion)} ${vessel.propulsion.toUpperCase()} 
                 (${vessel.propulsion === 'sail' ? 'Greek Names' : vessel.propulsion === 'steam' ? 'Norse Names' : 'Custom'})`;
+            
+            // Show class (read-only)
+            document.getElementById('editClassDisplay').textContent = vessel.type;
             
             // Setup name selection
             const nameSelect = document.getElementById('editNameSelect');
@@ -1068,8 +1216,10 @@
             }
             
             document.getElementById('editRole').value = vessel.role;
+            document.getElementById('editNotes').value = vessel.notes || '';
             document.getElementById('editActive').checked = vessel.active;
             document.getElementById('editDamaged').checked = vessel.damaged;
+            document.getElementById('rebuildVessel').checked = false;
             
             document.getElementById('editModal').classList.add('active');
         }
@@ -1102,13 +1252,25 @@
 
             vessel.name = newName;
             vessel.role = document.getElementById('editRole').value;
+            vessel.notes = document.getElementById('editNotes').value.trim();
             vessel.active = document.getElementById('editActive').checked;
             vessel.damaged = document.getElementById('editDamaged').checked;
+            
+            // Handle rebuild/version increment
+            const wasRebuilt = document.getElementById('rebuildVessel').checked;
+            if (wasRebuilt) {
+                vessel.version = (vessel.version || 1) + 1;
+            }
             
             saveData();
             renderVessels();
             closeModal();
-            showToast('Vessel updated successfully');
+            
+            if (wasRebuilt) {
+                showToast(`Vessel rebuilt! Now ${vessel.name} ${toRoman(vessel.version)}`);
+            } else {
+                showToast('Vessel updated successfully');
+            }
         }
 
         // Close modal on outside click
